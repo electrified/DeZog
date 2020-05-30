@@ -147,6 +147,17 @@ export interface ZxSimType {
 	vsyncInterrupt: boolean,
 }
 
+export interface SimhType {
+	// The hostname/IP address of the socket that connects the serial port.
+	hostname: string;
+
+	// The port of the socket that connects the serial port.
+	port: number;
+
+	/// The socket timeout in seconds.
+	socketTimeout: number;
+}
+
 /*
 /// Definitions for the 'serial' remote type.
 export interface SerialType {
@@ -177,6 +188,8 @@ export interface SettingsParameters extends DebugProtocol.LaunchRequestArguments
 
 	// The special settings for the internal Z80 simulator.
 	zsim: ZxSimType;
+
+	simh: SimhType;
 
 	// The special settings for the serial connection.
 	serial: SerialSocketType;
@@ -285,6 +298,7 @@ export class Settings {
 				zrcp: <any>undefined,
 				cspect: <any>undefined,
 				zsim: <any>undefined,
+				simh: <any>undefined,
 				serial: <any>undefined,
 				unitTests: <any>undefined,
 				rootFolder: <any>undefined,
@@ -578,7 +592,7 @@ export class Settings {
 	public static CheckSettings() {
 		// Check remote type
 		const rType=Settings.launch.remoteType;
-		const allowedTypes=['zrcp', 'cspect', 'serial', 'zsim'];
+		const allowedTypes=['zrcp', 'cspect', 'serial', 'zsim', 'simh'];
 		//const allowedTypes=['zrcp', 'cspect', /*'serial',*/ 'zsim'];
 		const found = (allowedTypes.indexOf(rType) >= 0);
 		if (!found) {

@@ -1,0 +1,49 @@
+Connected to the Altair 8800 (Z80) simulator REM-CON device, line 0
+
+Altair 8800 (Z80) Remote Console
+Enter single commands or to enter multiple command mode enter the ^E character
+Master Mode Session
+sim> noecho
+Unknown command
+
+sim> echo Startup
+Startup
+sim> attach n8vem0 SBC_simh.rom
+sim> set sio port=68/0/00/00/00/F/00/T
+sim> set sio port=6D/0/01/00/20/F/00/F
+sim> go
+Simulator Running...
+SIM> #
+
+Simulation stopped, PC: 00000 (JP 0100h)
+sim> #
+sim> sho cpu
+CPU
+        64KB, NOITRAP, Z80, AZ80, STOPONHALT
+        NONBANKED, NOALTAIRROM, QUIET
+        MMU, NOSWITCHER
+sim> #
+sim> go
+Simulator Running...
+
+SIM> #
+
+SIM> sho cpu
+CPU
+        64KB, NOITRAP, Z80, AZ80, STOPONHALT
+        NONBANKED, NOALTAIRROM, QUIET
+        MMU, NOSWITCHER
+
+SIM> #
+
+SIM> exa state
+AF:     7008
+BC:     0200
+DE:     85AF
+HL:     8330
+PC:     00AE0
+SP:     04F6
+IX:     0000
+IY:     06DA
+AF1:    0000
+BC1:    0000

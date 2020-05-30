@@ -212,7 +212,7 @@ function configureLogging() {
 	}
 
 	// Enable to get a log of the commands only
-	if(false) {
+	if(true) {
 		const channelOut = vscode.window.createOutputChannel("DeZog Socket Commands");
 		Lg.LogSocketCommands = new Log();
 		Lg.LogSocketCommands.init(channelOut, undefined);

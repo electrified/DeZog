@@ -4,6 +4,7 @@ import { RemoteBase } from './remotebase';
 import {ZxSimulatorRemote} from './zxsimulator/zxsimremote';
 //import {ZxNextSocketRemote} from './zxnext/zxnextsocketremote';
 import {CSpectRemote} from './zxnext/cspectremote';
+import {SimhRemote}  from './simh/simhremote';
 import {Utility} from '../misc/utility';
 import {ZxNextSocketRemote} from './zxnext/zxnextsocketremote';
 
@@ -32,6 +33,9 @@ export class RemoteFactory {
 				break;
 			case 'zsim':	// Simulator
 				RemoteFactory.setRemote(new ZxSimulatorRemote());
+				break;
+			case 'simh':
+				RemoteFactory.setRemote(new SimhRemote());
 				break;
 			case 'mame':
 				Utility.assert(false);	// needs to be implemented

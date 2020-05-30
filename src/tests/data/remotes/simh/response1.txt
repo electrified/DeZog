@@ -1,0 +1,69 @@
+Connected to the Altair 8800 (Z80) simulator REM-CON device, line 0
+
+Altair 8800 (Z80) Remote Console
+Enter single commands or to enter multiple command mode enter the ^E character
+Master Mode Session
+sim> noecho
+Unknown command
+sim> help
+Help is available for devices
+
+   HELP dev
+   HELP dev SET
+   HELP dev SHOW
+   HELP dev REGISTERS
+
+Help is available for the following commands:
+
+    !              ASSERT         ASSIGN         ATTACH         BOOT
+    BREAK          CALL           CAT            CD             CONTINUE
+    COPY           CP             DEASSIGN       DEBUG          DELETE
+    DEPOSIT        DETACH         DIR            DISKINFO       DO
+    DUMP           ECHO           ECHOF          ELSE           EVALUATE
+    EXAMINE        EXIT           EXPECT         GO             GOTO
+    HELP           IDEPOSIT       IEXAMINE       IF             IGNORE
+    LOAD           LS             MKDIR          MOVE           MV
+    NEXT           NOBREAK        NODEBUG        NOEXPECT       NORUNLIMIT
+    NOSEND         ON             PROCEED        PWD            RENAME
+    RESET          RESTORE        RETURN         RM             RMDIR
+    RUN            RUNLIMIT       SAVE           SEND           SET
+    SHIFT          SHOW           SLEEP          STEP           TESTLIB
+    TYPE
+sim> echo Startup
+Startup
+sim> attach n8vem0 SBC_simh.rom
+sim> set sio port=68/0/00/00/00/F/00/T
+sim> set sio port=6D/0/01/00/20/F/00/F
+sim> go
+Simulator Running...
+SIM> #
+
+Simulation stopped, PC: 00000 (JP 0100h)
+sim> #
+sim> sho cpu
+CPU
+        64KB, NOITRAP, Z80, AZ80, STOPONHALT
+        NONBANKED, NOALTAIRROM, QUIET
+        MMU, NOSWITCHER
+sim> #
+sim> go
+Simulator Running...
+SIM> sho cpu
+CPU
+        64KB, NOITRAP, Z80, AZ80, STOPONHALT
+        NONBANKED, NOALTAIRROM, QUIET
+        MMU, NOSWITCHER
+
+SIM> #
+
+SIM> exa state
+AF:     7008
+BC:     0200
+DE:     85AF
+HL:     8330
+PC:     00AE0
+SP:     04F6
+IX:     0000
+IY:     06DA
+AF1:    0000
+BC1:    0000

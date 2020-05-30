@@ -34,7 +34,7 @@
 		"compile": "tsc -p ./src",
 		"tslint": "eslint ./src/**/*.ts",
 		"watch": "tsc -w -p ./src",
-		"test": "mocha -u tdd ./out/tests/",
+		"test": "mocha -u tdd ./out/tests/**/*.js",
 		"preinstall": "npx npm-force-resolutions",
 		"postinstall": "node ./node_modules/vscode/bin/install",
 		"package": "vsce package",
