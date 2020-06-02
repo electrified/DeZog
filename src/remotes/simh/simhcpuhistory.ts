@@ -1,8 +1,8 @@
-// import { sSocket  } from './simhsocket';
+import { sSocket  } from './simhsocket';
 //import { Z80RegistersClass } from '../z80registers';
 import {CpuHistoryClass} from '../cpuhistory';
 import {HistoryInstructionInfo, DecodeHistoryInfo} from '../decodehistinfo';
-// import {Utility} from '../../misc/utility';
+import {Utility} from '../../misc/utility';
 
 /**
  * Use similar data as DecodeRegisterData but with data extension.
@@ -92,11 +92,11 @@ export class SimhCpuHistory extends CpuHistoryClass {
 	protected async getRemoteHistoryIndex(index: number): Promise<HistoryInstructionInfo|undefined> {
 		return new Promise<string>(resolve => {
 			// Utility.assert(index >= 0);
-			// sSocket.send('cpu-history get ' + index, data => { // 'cpu-history get' starts at 0 too
-				// if(data.substr(0,5).toLowerCase() == 'error')
+			// sSocket.send('show cpu history ' + index, data => { // 'cpu-history get' starts at 0 too
+			// 	if(data.substr(0,5).toLowerCase() == 'error')
 					resolve(undefined);
 				// else
-					// resolve(data);
+				// 	resolve(data);
 			// });
 		});
 	}

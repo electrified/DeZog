@@ -7,14 +7,16 @@ import { Settings } from '../../settings';
  */
 class CommandEntry {
 	public command: string|undefined;	///< The command string
-	public handler: (data: string) => void;	///< The handler being executed after receiving data.
+	public handlers: Array<Function> | undefined;	///< The handler being executed after receiving data.
 	public timeout: number;		///< The timeout until a response is expected.
 	public dispatched: boolean;
-	constructor(command: string|undefined, handler: (data: string) => void, dispatched: boolean, timeout: number) {
+	public noResponse: boolean;
+	constructor(command: string|undefined, handler: (data: string) => void | undefined, dispatched: boolean, timeout: number, noResponse: boolean = false) {
 		this.command = command;
-		this.handler = handler;
+		this.handlers = [handler];
 		this.timeout = timeout;
 		this.dispatched = dispatched;
+		this.noResponse = noResponse;
 	}
 }
 
@@ -23,7 +25,6 @@ enum SocketState {
 	CONNECTING,
 	CONNECTED_WAITING_ON_WELCOME_MSG,
 	CONNECTED
-
 };
 
 enum ConsoleState {
@@ -157,16 +158,45 @@ export class SimhSocket extends Socket {
 	 * is not signalled to the user.
 	 * @param timeout The timeout in ms or 0 if no timeout should be used. Default is 100ms. Normally use -1 (or omit) to use the timeout from the Settings.
 	 */
-	public send(command: string, handler: {(data)} = (data) => {}) {
-		const timeout = this.messageTimeout;
-		// Create command entry
-		var cEntry = new CommandEntry(command, handler, false, timeout);
-		this.queue.push(cEntry);
-		this.emitQueueChanged();
+	public send(command: string, handler: {(data)} | undefined = (data) => {}, timeout: number = this.messageTimeout, noResponse : boolean = false) {
+		if (!noResponse && this.queue.length > 0 && this.queue[this.queue.length - 1].command === command) {
+			console.log("attaching handler to previous command as the same")
+			this.queue[this.queue.length - 1].handlers?.push(handler)
+		} else {
+			// Create command entry
+			var cEntry = new CommandEntry(command, handler, false, timeout, noResponse);
+			this.queue.push(cEntry);
+			this.emitQueueChanged();
+			console.log("queueing " + cEntry.command + " depth " + this.queue.length)
+		}
 
-		if (this.queue.length==1) {
+		if (this.queue.filter(cmd => !cmd.dispatched).length ==1) {
 			// Send command
 			this.sendSocket();
+		}
+	}
+
+	/**
+	 * Sends the oldest command in the queue through the socket.
+	 */
+	private sendSocket() {
+		// Check if any command in the queue
+		let dispatchedQueue = this.queue.filter(cmd => cmd.dispatched);
+
+		if(dispatchedQueue.length > 1)
+			return;
+
+		// Send oldest command
+		let cEntryIdx = this.queue.findIndex(cmd => !cmd.dispatched);
+
+		if (cEntryIdx >= 0) {
+			let cEntry = this.queue[cEntryIdx];
+
+			if(cEntry.noResponse) {
+				this.queue.splice(cEntryIdx, 1);
+			}
+
+			this.sendSocketCmd(cEntry);
 		}
 	}
 
@@ -187,7 +217,7 @@ export class SimhSocket extends Socket {
 			return;
 		// normal processing
 
-		console.log("sendSocketCmd " + cmd.command)
+		console.log("write " + cmd.command + " depth " + this.queue.length);
 
 		let command = cmd.command + '\n';
 		this.log('=>', "'"+cmd.command+"'");
@@ -204,26 +234,6 @@ export class SimhSocket extends Socket {
 		cmd.dispatched = true;
 	}
 
-
-	/**
-	 * Sends the oldest command in the queue through the socket.
-	 */
-	private sendSocket() {
-		// check if connected
-		// if(this.state != SocketState.CONNECTED)
-		// 	return;
-
-		// Check if any command in the queue
-		let dispatchedQueue = this.queue.find(cmd => cmd.dispatched);
-
-		if(dispatchedQueue)
-			return;
-
-		// Send oldest command
-		let cEntry = this.queue[0];
-		this.sendSocketCmd(cEntry);
-	}
-
 	/**
 	 * Receives data from the socket.
 	 */
@@ -234,19 +244,16 @@ export class SimhSocket extends Socket {
 			return;
 		}
 
-		console.log(sData);
-
 		this.receivedDataChunk += sData;
 
 		const processedResponses = this.chunkResponse(this.receivedDataChunk)
 
 		const remaining = processedResponses.pop()
 
-		this.receivedDataChunk =  remaining ? remaining : ''
+		this.receivedDataChunk = remaining ? remaining : ''
 
 		processedResponses.forEach(resp => this.processRecdData(resp))
 
-		// this.consoleState = ConsoleState.AVAILABLE;
 		this.sendSocket()
 	}
 
@@ -274,7 +281,7 @@ export class SimhSocket extends Socket {
 
 			if (filteredCommand.length != 0) {
 				responses.push(filteredCommand.join('\n'))
-				console.log(promptIndex + " " + filteredCommand.join('\n'))
+				// console.log(promptIndex + " " + filteredCommand.join('\n'))
 			}
 		}
 		responses.push(input)
@@ -284,7 +291,8 @@ export class SimhSocket extends Socket {
 	protected getPromptIndex(input: string): number[] {
 		const tokens = [
 			'sim>',
-			'SIM>'
+			'SIM>',
+			'#'
 		]
 
 		const indexes = tokens.map( t => [input.indexOf(t), t.length]).reduce((acc, curr) => {
@@ -301,14 +309,35 @@ export class SimhSocket extends Socket {
 	}
 
 	protected processRecdData(commandResponse: string) {
-		// Remove corresponding command
-		if(this.queue && this.queue[0].dispatched) {
-			let cEntry = this.queue.shift();
-			this.emitQueueChanged();
+		let cEntry: CommandEntry | undefined;
 
+		//Simulation stopped, PC: 00C75 (AND 01h)
+		//Breakpoint, PC: 00100 (JP 0604h)
+		if(this.queue && this.queue.length > 0) {
+			if (commandResponse.indexOf("Simulation stopped") >= 0 || commandResponse.indexOf("Breakpoint") >= 0) {
+				const goIndex = this.queue.findIndex(cmd => cmd.command == "go")
+				cEntry = this.queue.splice(goIndex, 1)[0];
+				this.emitQueueChanged();
+			} else if (commandResponse.indexOf("Simulator Running") >= 0 ) {
+				//discard
+			} else {
+				const nonGoCommand = this.queue.findIndex(cmd => cmd.dispatched && cmd.command !== "go")
+				if (nonGoCommand >=0) {
+					cEntry = this.queue.splice(nonGoCommand, 1)[0];
+					this.emitQueueChanged();
+				}
+			}
+		}
+
+		if(cEntry) {
 			// Execute handler
-			if(cEntry != undefined)
-				cEntry.handler(commandResponse);
+			if (commandResponse.indexOf("Invalid remote console command") >= 0 ) {
+				console.log("discarding command/response: " + cEntry.command + "resp " + commandResponse)
+			} else if(cEntry != undefined) {
+				console.log("response recd " + cEntry.command + " depth " + this.queue.length + " text " + commandResponse.replace('\n','').substring(0,20))
+				cEntry.handlers?.forEach(handler => handler(commandResponse))
+			}
+
 		}
 	}
 

@@ -19,6 +19,9 @@ import { RemoteBase } from "../remotebase";
 import { SimhCpuHistory, DecodeSimhHistoryInfo } from './simhcpuhistory';
 import { DecodeSimhRegisters } from './decodesimhdata';
 
+
+export const NO_TIMEOUT = 0;	///< Can be used as timeout value and has the special meaning: Don't use any timeout
+
 export class SimhRemote extends RemoteBase {
 
 	/// Constructor.
@@ -56,6 +59,10 @@ export class SimhRemote extends RemoteBase {
 				sSocket.send('attach n8vem0 SBC_simh.rom');
 				sSocket.send('set sio port=68/0/00/00/00/F/00/T');
 				sSocket.send('set sio port=6D/0/01/00/20/F/00/F');
+				// sSocket.send('set cpu history=32');
+				// sSocket.send('expect "Boot Selection?" send "2"; continue');
+				// sSocket.send('expect "Slice(0-9)[0]?" send "0"; continue');
+
 				sSocket.send('go');
 
 				// Send 'initialize' to Machine.
@@ -141,8 +148,11 @@ export class SimhRemote extends RemoteBase {
 	public async continue(): Promise<string> {
 		return new Promise<string>(resolve => {
 			sSocket.send('go', data => {
+				Z80Registers.clearCache();
+				this.clearCallStack();
+
 				resolve(data);
-			});
+			}, NO_TIMEOUT);
 		});
 	}
 
@@ -150,11 +160,7 @@ export class SimhRemote extends RemoteBase {
 	 * 'pause' the debugger.
 	 */
 	public async pause(): Promise<void> {
-		return new Promise<void>(resolve => {
-			sSocket.send('\0x05', data => {
-				resolve();
-			});
-		});
+		sSocket.send('\x05', () => {}, -1, true);
 	}
 
 	/**
@@ -174,10 +180,7 @@ export class SimhRemote extends RemoteBase {
 	 * 'breakReasonString' a possibly text with the break reason.
 	 */
 	public async stepOver(): Promise<{instruction: string, breakReasonString?: string}> {
-		// Utility.assert(false);	// override this
-		return {
-			instruction: ""
-		};
+		return this.stepInto();
 	}
 
 
@@ -190,17 +193,26 @@ export class SimhRemote extends RemoteBase {
 	 * end of the cpu history is reached.
 	 */
 	public async stepInto(): Promise<{instruction: string,breakReasonString?: string}> {
-		// Utility.assert(false);	// override this
-		// return new Promise<string>(resolve => {
-		// 	sSocket.send('\05', data => {
-		// 		resolve();
-		// 	});
-		// });
-		// sSocket.send('echo Startup');
-		// sSocket.send('attach n8vem0 SBC_simh.rom');
-		return {
-			instruction: ""
-		};
+		return new Promise<{instruction: string, breakReasonString?: string}>(resolve => {
+			// Normal step into.
+			this.getRegisters().then(() => {
+				const pc=Z80Registers.getPC();
+				sSocket.send('examine -m '+ pc, instruction => {
+					// Clear register cache
+					Z80Registers.clearCache();
+					sSocket.send('step', async result => {
+						// Clear cache
+						Z80Registers.clearCache();
+						this.clearCallStack();
+						// Handle code coverage
+						// this.handleCodeCoverage();
+						// Read the spot history
+						await CpuHistory.getHistorySpotFromRemote();
+						resolve({instruction});
+					});
+				});
+			});
+		});
 	}
 
 
@@ -270,11 +282,9 @@ export class SimhRemote extends RemoteBase {
 	 */
 	public async setBreakpoint(bp: RemoteBreakpoint): Promise<number> {
 		return new Promise<number>(resolve => {
-			sSocket.send('\0x05');
+			sSocket.send('\x05', () => {}, -1, true);
 			sSocket.send('br ' + bp.address);
 		});
-
-
 	}
 
 
