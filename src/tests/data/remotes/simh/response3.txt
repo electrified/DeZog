@@ -1,0 +1,42 @@
+
+
+Connected to the Altair 8800 (Z80) simulator REM-CON device
+
+Altair 8800 (Z80) Remote Console
+Enter single commands or to enter multiple command mode enter the ^E character
+Master Mode Session
+sim>
+sim>
+sim>
+sim>
+sim> attach n8vem0 SBC_simh.rom
+sim> set sio port=68/0/00/00/00/F/00/T
+sim> set sio port=6D/0/01/00/20/F/00/F
+sim> go
+Simulator Running...SIM> send "2"
+SIM> continue
+Simulator Running...SIM> send "0"
+SIM> continue
+Simulator Running...SIM> send "2"
+Invalid remote console command
+SIM> continue
+
+Invalid remote console command, PC: 00C6E (LD BC,0C978h)
+
+Invalid remote console command, PC: 00C6E (LD BC,0C978h)
+SIM> br 100
+SIM> send "G:pt3.com\n"
+SIM> echo "READY"
+"READY"
+SIM> continue
+Simulator Running...
+Breakpoint, PC: 00100 (LD C,09h)
+SIM> send "0"
+SIM> continue
+Simulator Running...
+Breakpoint, PC: 00100 (LD C,09h)
+SIM> send "2"
+SIM> continue
+Simulator Running...
+Breakpoint, PC: 00100 (LD C,09h)
+sim>

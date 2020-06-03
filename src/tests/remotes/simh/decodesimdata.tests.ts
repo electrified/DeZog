@@ -3,7 +3,7 @@ import {DecodeSimhRegisters} from '../../../remotes/simh/decodesimhdata';
 import {readFileSync} from 'fs';
 
 
-suite.only('DecodeSimhRegisters', () => {
+suite('DecodeSimhRegisters', () => {
 	let simhRegisters: DecodeSimhRegisters;
 	const exampleResponse = readFileSync("./src/tests/data/remotes/simh/examine_state.txt").toString()
 

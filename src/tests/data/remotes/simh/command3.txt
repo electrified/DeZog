@@ -1,0 +1,7 @@
+this is a dummy command
+echo Startup
+attach n8vem0 SBC_simh.rom
+set sio port=68/0/00/00/00/F/00/T
+set sio port=6D/0/01/00/20/F/00/F
+go
+examine state

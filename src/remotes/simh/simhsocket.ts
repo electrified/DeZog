@@ -40,7 +40,7 @@ export class SimhSocket extends Socket {
 
 	protected consoleState : ConsoleState;
 
-	private queue: Array<CommandEntry>;
+	public queue: Array<CommandEntry>;
 
 	// private lastCallQueue: Array<()=>void>;
 
@@ -159,6 +159,23 @@ export class SimhSocket extends Socket {
 	 * @param timeout The timeout in ms or 0 if no timeout should be used. Default is 100ms. Normally use -1 (or omit) to use the timeout from the Settings.
 	 */
 	public send(command: string, handler: {(data)} | undefined = (data) => {}, timeout: number = this.messageTimeout, noResponse : boolean = false) {
+		this.enqueue(command, handler, timeout, noResponse);
+
+		if (this.queue.filter(cmd => !cmd.dispatched).length ==1) {
+			// Send command
+			this.sendSocket();
+		}
+	}
+
+	/**
+	 * Puts things on the command queue but doesn't send. Exposed for testing
+	 *
+	 * @param command
+	 * @param handler
+	 * @param timeout
+	 * @param noResponse
+	 */
+	public enqueue(command: string, handler: {(data)} | undefined = (data) => {}, timeout: number = this.messageTimeout, noResponse : boolean = false) {
 		if (!noResponse && this.queue.length > 0 && this.queue[this.queue.length - 1].command === command) {
 			console.log("attaching handler to previous command as the same")
 			this.queue[this.queue.length - 1].handlers?.push(handler)
@@ -168,11 +185,6 @@ export class SimhSocket extends Socket {
 			this.queue.push(cEntry);
 			this.emitQueueChanged();
 			console.log("queueing " + cEntry.command + " depth " + this.queue.length)
-		}
-
-		if (this.queue.filter(cmd => !cmd.dispatched).length ==1) {
-			// Send command
-			this.sendSocket();
 		}
 	}
 
@@ -237,7 +249,7 @@ export class SimhSocket extends Socket {
 	/**
 	 * Receives data from the socket.
 	 */
-	private receiveSocket(data: Buffer) {
+	public receiveSocket(data: Buffer) {
 		const sData = data.toString();
 		if(!sData) {
 			LogSocket.log('Error: Received ' + data.length + ' bytes of undefined data!');
@@ -337,7 +349,6 @@ export class SimhSocket extends Socket {
 				console.log("response recd " + cEntry.command + " depth " + this.queue.length + " text " + commandResponse.replace('\n','').substring(0,20))
 				cEntry.handlers?.forEach(handler => handler(commandResponse))
 			}
-
 		}
 	}
 

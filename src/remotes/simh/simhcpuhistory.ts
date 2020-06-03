@@ -1,8 +1,8 @@
-import { sSocket  } from './simhsocket';
+// import { sSocket  } from './simhsocket';
 //import { Z80RegistersClass } from '../z80registers';
 import {CpuHistoryClass} from '../cpuhistory';
 import {HistoryInstructionInfo, DecodeHistoryInfo} from '../decodehistinfo';
-import {Utility} from '../../misc/utility';
+// import {Utility} from '../../misc/utility';
 
 /**
  * Use similar data as DecodeRegisterData but with data extension.
@@ -100,6 +100,4 @@ export class SimhCpuHistory extends CpuHistoryClass {
 			// });
 		});
 	}
-
 }
-

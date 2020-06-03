@@ -36,4 +36,17 @@ AF1:    0000
 BC1:    0000
 ` )
 	})
+
+
+	test.only("receiveSocket", () => {
+		sSocket.enqueue("echo Startup")
+		sSocket.enqueue("this is a dummy command")
+		sSocket.enqueue("attach n8vem0 SBC_simh.rom")
+		sSocket.enqueue("set sio port=68/0/00/00/00/F/00/T")
+		sSocket.enqueue("set sio port=6D/0/01/00/20/F/00/F")
+		sSocket.enqueue("go")
+		sSocket.enqueue("examine state")
+
+		sSocket.receiveSocket(readFileSync("./src/tests/data/remotes/simh/response3.txt"))
+	})
 })
