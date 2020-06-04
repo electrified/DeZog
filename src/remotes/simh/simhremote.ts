@@ -22,6 +22,12 @@ import { DecodeSimhRegisters } from './decodesimhdata';
 
 export const NO_TIMEOUT = 0;	///< Can be used as timeout value and has the special meaning: Don't use any timeout
 
+export const GO_COMMAND = {command:'go', responseMatches: (data) => data.indexOf("Simulation stopped") >= 0 || data.indexOf("Breakpoint") >= 0};
+export const GET_REGISTERS = {command:'examine state', responseMatches: (data) => data.indexOf("examine state") >= 0};
+export const SET_REGISTERS = {responseMatches: (data) => data.indexOf("deposit") >= 0};
+export const STOP_COMMAND = {command: '\x05', handler: () => {}, timeout: -1, noResponse: true, responseMatches: () => true};
+export const INITIAL_BP_COMMAND = {command: 'br 100[4]', handler: () => {}, timeout: -1, noResponse: true, responseMatches: () => true};
+
 export class SimhRemote extends RemoteBase {
 
 	/// Constructor.
@@ -55,15 +61,16 @@ export class SimhRemote extends RemoteBase {
 
 		sSocket.on('connected', async () => {
 			try {
-				sSocket.send('echo Startup');
-				sSocket.send('attach n8vem0 SBC_simh.rom');
-				sSocket.send('set sio port=68/0/00/00/00/F/00/T');
-				sSocket.send('set sio port=6D/0/01/00/20/F/00/F');
+				sSocket.send({command: 'echo Startup'});
+				sSocket.send({command: 'attach n8vem0 SBC_simh.rom'});
+				sSocket.send({command: 'set sio port=68/0/00/00/00/F/00/T'});
+				sSocket.send({command: 'set sio port=6D/0/01/00/20/F/00/F'});
+				sSocket.send(INITIAL_BP_COMMAND);
 				// sSocket.send('set cpu history=32');
 				// sSocket.send('expect "Boot Selection?" send "2"; continue');
 				// sSocket.send('expect "Slice(0-9)[0]?" send "0"; continue');
 
-				sSocket.send('go');
+				sSocket.send(GO_COMMAND);
 
 				// Send 'initialize' to Machine.
 				this.emit('initialized');
@@ -117,10 +124,10 @@ export class SimhRemote extends RemoteBase {
 
 		return new Promise<void>(resolve => {
 			// Get new (real emulator) data
-			sSocket.send('examine state', data => {
+			sSocket.send({...GET_REGISTERS, handler: data => {
 				Z80Registers.setCache(data);
 				resolve();
-			});
+			}});
 		});
 	}
 
@@ -135,8 +142,19 @@ export class SimhRemote extends RemoteBase {
 	 * @return Promise with the "real" register value.
 	 */
 	public async setRegisterValue(register: string, value: number): Promise<number> {
-		// Utility.assert(false);	// override this
-		return 0;
+		return new Promise<number>(resolve => {
+			// set value
+			const hexVal = value.toString(16);
+			sSocket.send({...SET_REGISTERS, command: `deposit ${register} ${hexVal}`, handler: data => {
+				// Get real value (should be the same as the set value)
+				this.getRegistersFromEmulator()
+				.then(() => {
+					const realValue = this.getRegisterValue(register);
+					resolve(realValue);
+				});
+			}
+			});
+		});
 	}
 
 	/**
@@ -147,12 +165,12 @@ export class SimhRemote extends RemoteBase {
 	 */
 	public async continue(): Promise<string> {
 		return new Promise<string>(resolve => {
-			sSocket.send('go', data => {
+			sSocket.send({ ...GO_COMMAND, handler: data => {
 				Z80Registers.clearCache();
 				this.clearCallStack();
 
 				resolve(data);
-			}, NO_TIMEOUT);
+			}, timeout: NO_TIMEOUT});
 		});
 	}
 
@@ -160,7 +178,7 @@ export class SimhRemote extends RemoteBase {
 	 * 'pause' the debugger.
 	 */
 	public async pause(): Promise<void> {
-		sSocket.send('\x05', () => {}, -1, true);
+		sSocket.send(STOP_COMMAND);
 	}
 
 	/**
@@ -180,7 +198,7 @@ export class SimhRemote extends RemoteBase {
 	 * 'breakReasonString' a possibly text with the break reason.
 	 */
 	public async stepOver(): Promise<{instruction: string, breakReasonString?: string}> {
-		return this.stepInto();
+		return {instruction: ""}; //this.stepInto();
 	}
 
 
@@ -197,10 +215,12 @@ export class SimhRemote extends RemoteBase {
 			// Normal step into.
 			this.getRegisters().then(() => {
 				const pc=Z80Registers.getPC();
-				sSocket.send('examine -m '+ pc, instruction => {
+				sSocket.send({command:'examine -m '+ pc.toString(16).padStart(2, '0'), handler: instruction => {
+
+					instruction = instruction.split('\n')[1].split(':')[1].trim()
 					// Clear register cache
 					Z80Registers.clearCache();
-					sSocket.send('step', async result => {
+					sSocket.send({command: 'step', handler: async result => {
 						// Clear cache
 						Z80Registers.clearCache();
 						this.clearCallStack();
@@ -209,8 +229,10 @@ export class SimhRemote extends RemoteBase {
 						// Read the spot history
 						await CpuHistory.getHistorySpotFromRemote();
 						resolve({instruction});
-					});
+					}
 				});
+				}
+			});
 			});
 		});
 	}
@@ -257,7 +279,7 @@ export class SimhRemote extends RemoteBase {
 		// Utility.assert(false);	// override this
 	}
 
-		/**
+	/**
 	 * Set all log points.
 	 * Called at startup and once by enableLogPoints (to turn a group on or off).
 	 * Promise is called after the last logpoint is set.
@@ -282,8 +304,8 @@ export class SimhRemote extends RemoteBase {
 	 */
 	public async setBreakpoint(bp: RemoteBreakpoint): Promise<number> {
 		return new Promise<number>(resolve => {
-			sSocket.send('\x05', () => {}, -1, true);
-			sSocket.send('br ' + bp.address);
+			sSocket.send(STOP_COMMAND);
+			sSocket.send({command:'break ' +  bp.address.toString(16).padStart(2, '0')});
 		});
 	}
 
@@ -293,7 +315,10 @@ export class SimhRemote extends RemoteBase {
 	 * Breakpoint is removed at the Remote and removed from the 'breakpoints' array.
 	 */
 	protected async removeBreakpoint(bp: RemoteBreakpoint): Promise<void> {
-		// Utility.assert(false);	// override this
+		return new Promise<void>(resolve => {
+			sSocket.send(STOP_COMMAND);
+			sSocket.send({command:'nobreak ' + bp.address.toString(16).padStart(2, '0')});
+		});
 	}
 
 
@@ -312,10 +337,10 @@ export class SimhRemote extends RemoteBase {
 
 		// Send command to ZEsarUX
 		return new Promise<string>(resolve => {
-			sSocket.send(cmd, data => {
+			sSocket.send({command: cmd, handler: data => {
 				// Call handler
 				resolve(data);
-			});
+			}});
 		});
 	}
 

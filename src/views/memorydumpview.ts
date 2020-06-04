@@ -516,7 +516,7 @@ export class MemoryDumpView extends BaseView {
 			<title>Dump</title>
 		</head>
 
-		<body style="font-family: Courier">
+		<body style="font-family: Courier New, Courier, monospace">
 
 		%s
 

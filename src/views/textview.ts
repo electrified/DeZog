@@ -45,7 +45,7 @@ export class TextView extends BaseView {
 			<title>Dump</title>
 		</head>
 
-		<body style="font-family: Courier">
+		<body style="font-family: Courier New, Courier, monospace">
 
 		<div style="word-wrap:break-word">
 

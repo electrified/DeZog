@@ -409,7 +409,15 @@ export class Settings {
 		if (!Settings.launch.serial.socketTimeout)
 			Settings.launch.serial.socketTimeout=5;	// 5 secs
 
-
+		// serial
+		if (!Settings.launch.simh)
+			Settings.launch.simh={} as SimhType;
+		if (Settings.launch.simh.hostname==undefined)
+			Settings.launch.simh.hostname='localhost';
+		if (Settings.launch.simh.port==undefined)
+			Settings.launch.simh.port=9661;
+		if (!Settings.launch.simh.socketTimeout)
+			Settings.launch.simh.socketTimeout=5;	// 5 secs
 
 		if(!Settings.launch.rootFolder)
 			Settings.launch.rootFolder = rootFolder;

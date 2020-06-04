@@ -6,17 +6,20 @@ import { Settings } from '../../settings';
  * A command send to Zesarux debugger as it is being put in the queue.
  */
 class CommandEntry {
-	public command: string|undefined;	///< The command string
-	public handlers: Array<Function> | undefined;	///< The handler being executed after receiving data.
+	public command: string;	///< The command string
+	public handlers: Array<(data: string) => void> | undefined;	///< The handler being executed after receiving data.
 	public timeout: number;		///< The timeout until a response is expected.
 	public dispatched: boolean;
 	public noResponse: boolean;
-	constructor(command: string|undefined, handler: (data: string) => void | undefined, dispatched: boolean, timeout: number, noResponse: boolean = false) {
+	public responseMatches: (data: string) => boolean;
+	constructor(command: string, handler: ((data: string) => void) = () => {}, dispatched: boolean, timeout: number, noResponse: boolean = false,
+	responseMatches: (data: string) => boolean = (data) => data.indexOf(this.command) >= 0) {
 		this.command = command;
 		this.handlers = [handler];
 		this.timeout = timeout;
 		this.dispatched = dispatched;
 		this.noResponse = noResponse;
+		this.responseMatches = responseMatches;
 	}
 }
 
@@ -33,6 +36,14 @@ enum ConsoleState {
 };
 
 const CONNECTION_TIMEOUT = 1000;	///< 1 sec
+
+interface SendParameters {
+	command: string;
+	handler?: (data: string) => void;
+	timeout?: number;
+	noResponse?: boolean;
+	responseMatches?: (data: string) => boolean;
+}
 
 export class SimhSocket extends Socket {
 
@@ -69,13 +80,14 @@ export class SimhSocket extends Socket {
 		this.state = SocketState.UNCONNECTED;
 		this.consoleState = ConsoleState.UNAVAILABLE;
 		this.queue = new Array<CommandEntry>();
+		this.receivedDataChunk = '';
 
 		// Wait on first text from zesarux after connection
 		var cEntry = new CommandEntry('this is a dummy command', data => {
 			this.state = SocketState.CONNECTED;
 			LogSocket.log('First text from simh received!');
 			this.emit('connected');	// data transmission may start now.
-		}, true, 0);
+		}, true, 0, false, () => true);
 		this.queue.push(cEntry);
 		this.emitQueueChanged();
 	}
@@ -146,6 +158,8 @@ export class SimhSocket extends Socket {
 
 	}
 
+
+
 	/**
 	 * If messages are still pending the messages is queued.
 	 * Otherwise the message is directly send.
@@ -158,8 +172,8 @@ export class SimhSocket extends Socket {
 	 * is not signalled to the user.
 	 * @param timeout The timeout in ms or 0 if no timeout should be used. Default is 100ms. Normally use -1 (or omit) to use the timeout from the Settings.
 	 */
-	public send(command: string, handler: {(data)} | undefined = (data) => {}, timeout: number = this.messageTimeout, noResponse : boolean = false) {
-		this.enqueue(command, handler, timeout, noResponse);
+	public send({command, handler, timeout, noResponse, responseMatches} : SendParameters ) {
+		this.enqueue({command, handler, timeout, noResponse, responseMatches});
 
 		if (this.queue.filter(cmd => !cmd.dispatched).length ==1) {
 			// Send command
@@ -175,13 +189,13 @@ export class SimhSocket extends Socket {
 	 * @param timeout
 	 * @param noResponse
 	 */
-	public enqueue(command: string, handler: {(data)} | undefined = (data) => {}, timeout: number = this.messageTimeout, noResponse : boolean = false) {
+	public enqueue({command, handler, timeout = this.messageTimeout, noResponse, responseMatches } : SendParameters) {
 		if (!noResponse && this.queue.length > 0 && this.queue[this.queue.length - 1].command === command) {
 			console.log("attaching handler to previous command as the same")
-			this.queue[this.queue.length - 1].handlers?.push(handler)
+			this.queue[this.queue.length - 1].handlers?.push(handler!)
 		} else {
 			// Create command entry
-			var cEntry = new CommandEntry(command, handler, false, timeout, noResponse);
+			var cEntry = new CommandEntry(command, handler, false, timeout, noResponse, responseMatches);
 			this.queue.push(cEntry);
 			this.emitQueueChanged();
 			console.log("queueing " + cEntry.command + " depth " + this.queue.length)
@@ -222,8 +236,6 @@ export class SimhSocket extends Socket {
 		if(this.state != SocketState.CONNECTED)
 			return;
 
-		// if(this.consoleState != ConsoleState.AVAILABLE)
-		// 	return;
 		// Send command
 		if(cmd == undefined)
 			return;
@@ -237,8 +249,6 @@ export class SimhSocket extends Socket {
 		// Set timeout
 		this.setTimeout(0);//cmd.timeout);
 
-		// this.consoleState = ConsoleState.UNAVAILABLE;
-
 		// Send
 		this.write(command);
 		this.write("#\n");
@@ -250,6 +260,12 @@ export class SimhSocket extends Socket {
 	 * Receives data from the socket.
 	 */
 	public receiveSocket(data: Buffer) {
+		this.processResponses(data);
+
+		this.sendSocket()
+	}
+
+	public processResponses(data: Buffer) {
 		const sData = data.toString();
 		if(!sData) {
 			LogSocket.log('Error: Received ' + data.length + ' bytes of undefined data!');
@@ -265,33 +281,30 @@ export class SimhSocket extends Socket {
 		this.receivedDataChunk = remaining ? remaining : ''
 
 		processedResponses.forEach(resp => this.processRecdData(resp))
-
-		this.sendSocket()
 	}
 
-
-
 	/**
-	 * Given a block of reponse text, removes the delimiters
-	 *
+	 * Given a block of reponse text, breaks it down into command responses
 	 *
 	 * @param input
 	 */
 	public chunkResponse(input: string) : string[] {
 		var responses : string[] = [];
 
-		let promptIndex = [-1, 0];
+		let prompt = {index: -1, length: 0};
 
-		while((promptIndex = this.getPromptIndex(input))[0] >= 0) {
-			const command = input.substring(0, promptIndex[0]).trim()
+		while((prompt = this.getPromptIndex(input)).index >= 0) {
+			const command = input.substring(0, prompt.index).trim()
 
-			input = input.substring(promptIndex[0] + promptIndex[1])
+			input = input.substring(prompt.index + prompt.length)
 
 			const filteredCommand = command.split('\n')
 				.map(ln => ln.trim())
-				.filter(line => line.length > 0 && line != '#')
+				.filter(line => line && line.length > 0 && line != '#')
 
-			if (filteredCommand.length != 0) {
+
+			if (filteredCommand.length > 0) {
+				console.log(">>>>>>>>> " + filteredCommand.join('\n') + "<<<<<<<<<<<")
 				responses.push(filteredCommand.join('\n'))
 				// console.log(promptIndex + " " + filteredCommand.join('\n'))
 			}
@@ -300,18 +313,20 @@ export class SimhSocket extends Socket {
 		return responses
 	}
 
-	protected getPromptIndex(input: string): number[] {
+	protected getPromptIndex(input: string): {index: number, length: number} {
 		const tokens = [
 			'sim>',
 			'SIM>',
 			'#'
 		]
 
-		const indexes = tokens.map( t => [input.indexOf(t), t.length]).reduce((acc, curr) => {
-			if(acc[0] == -1) {
+		const indexes = tokens
+		.map( t => ({index: input.indexOf(t), length: t.length}))
+		.reduce((acc, curr) => {
+			if(acc.index == -1) {
 				return curr;
 			}
-			if (curr[0] >= 0 && curr[0] <= acc[0]) {
+			if (curr.index >= 0 && curr.index <= acc.index) {
 				return curr;
 			}
 			return acc;
@@ -326,16 +341,13 @@ export class SimhSocket extends Socket {
 		//Simulation stopped, PC: 00C75 (AND 01h)
 		//Breakpoint, PC: 00100 (JP 0604h)
 		if(this.queue && this.queue.length > 0) {
-			if (commandResponse.indexOf("Simulation stopped") >= 0 || commandResponse.indexOf("Breakpoint") >= 0) {
-				const goIndex = this.queue.findIndex(cmd => cmd.command == "go")
-				cEntry = this.queue.splice(goIndex, 1)[0];
-				this.emitQueueChanged();
-			} else if (commandResponse.indexOf("Simulator Running") >= 0 ) {
-				//discard
+
+			if (commandResponse.indexOf("Simulator Running") >= 0 && commandResponse.indexOf("Breakpoint") == -1) {
+				//discard as we keep the "go" command until we hit a breakpoint
 			} else {
-				const nonGoCommand = this.queue.findIndex(cmd => cmd.dispatched && cmd.command !== "go")
-				if (nonGoCommand >=0) {
-					cEntry = this.queue.splice(nonGoCommand, 1)[0];
+				const commandMatch = this.queue.findIndex(cmd => cmd.dispatched && cmd.responseMatches(commandResponse));
+				if (commandMatch >=0) {
+					cEntry = this.queue.splice(commandMatch, 1)[0];
 					this.emitQueueChanged();
 				}
 			}
@@ -442,11 +454,11 @@ export class SimhSocket extends Socket {
 			// Terminate connection
 			LogSocket.log('Quitting:');
 			// this.setTimeout(QUIT_TIMEOUT);
-			this.send('\n');	// Just for the case that we are waiting on a breakpoint.
+			this.send({ command:'\n'});	// Just for the case that we are waiting on a breakpoint.
 			// this.send('cpu-history enabled no', () => {}, true);
-			this.send('set remote nomaster', data => {
+			this.send({ command: 'set remote nomaster', handler: data => {
 				sSocket.end();
-			});
+			}});
 			return;
 		}
 

@@ -590,7 +590,7 @@ export class ZxNextSpritePatternsView extends BaseView {
 			<title>Dump</title>
 		</head>
 
-		<body style="font-family: Courier">
+		<body style="font-family: Courier New, Courier, monospace">
 
 		<script>
 			const vscode = acquireVsCodeApi();
