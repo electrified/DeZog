@@ -256,7 +256,10 @@ export class SimhRemote extends RemoteBase {
 	 * @param wp The watchpoint to set. Will set 'bpId' in the 'watchPoint'.
 	 */
 	public async setWatchpoint(wp: GenericWatchpoint): Promise<void> {
-		// Utility.assert(false);	// override this
+		return new Promise<void>(resolve => {
+			sSocket.send(STOP_COMMAND);
+			sSocket.send({command:'break -m ' +  wp.address.toString(16).padStart(2, '0')});
+		});
 	}
 
 
@@ -266,7 +269,10 @@ export class SimhRemote extends RemoteBase {
 	 * @param wp The watchpoint to renove. Will set 'bpId' in the 'watchPoint' to undefined.
 	 */
 	public async removeWatchpoint(wp: GenericWatchpoint): Promise<void> {
-		// Utility.assert(false);	// override this
+		return new Promise<void>(resolve => {
+			sSocket.send(STOP_COMMAND);
+			sSocket.send({command:'nobreak ' +  wp.address.toString(16).padStart(2, '0')});
+		});
 	}
 
 
@@ -352,8 +358,16 @@ export class SimhRemote extends RemoteBase {
 	 * @param handler(data, addr) The handler that receives the data. 'addr' gets the value of 'address'.
 	 */
 	public async readMemoryDump(address: number, size: number): Promise<Uint8Array> {
-		// Utility.assert(false);	// override this
-		return new Uint8Array();
+		return new Promise<Uint8Array>(resolve => {
+			// sSocket.send(STOP_COMMAND);
+			sSocket.send({command:`examine ${address.toString(16).padStart(2, '0')}/${size.toString(16).padStart(2, '0')}`,
+						  handler: (data) => {
+							const memoryData = data.split('\n')
+								.filter(line => line.indexOf(':') >= 0)
+								.map(line => parseInt(line.split(':')[1], 16))
+							resolve(new Uint8Array(memoryData));
+						  }});
+		});
 	}
 
 
